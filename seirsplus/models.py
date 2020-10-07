@@ -1193,7 +1193,7 @@ class SEIRSNetworkModel():
 #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^     
 
-    def run_iteration(self):
+    def run_iteration(self, tmax=numpy.inf):
 
         if(self.tidx >= len(self.tseries)-1):
             # Room has run out in the timeseries storage arrays; double the size of these arrays:
@@ -1223,46 +1223,51 @@ class SEIRSNetworkModel():
             # Compute the time until the next event takes place
             #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             tau = (1/alpha)*numpy.log(float(1/r1))
-            self.t += tau
-            self.timer_state += tau
 
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Compute which event takes place
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            transitionIdx   = numpy.searchsorted(cumsum,r2*alpha)
-            transitionNode  = transitionIdx % self.numNodes
-            transitionType  = transitionTypes[ int(transitionIdx/self.numNodes) ]
+            if self.t + tau > tmax:
+                tau = tmax - self.t
+                self.t += tau
+                self.timer_state += tau
+            else:
+                self.t += tau
+                self.timer_state += tau
 
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Perform updates triggered by rate propensities:
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            assert(self.X[transitionNode] == self.transitions[transitionType]['currentState'] and self.X[transitionNode]!=self.F), "Assertion error: Node "+str(transitionNode)+" has unexpected current state "+str(self.X[transitionNode])+" given the intended transition of "+str(transitionType)+"."
-            self.X[transitionNode] = self.transitions[transitionType]['newState']
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                # Compute which event takes place
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                transitionIdx   = numpy.searchsorted(cumsum,r2*alpha)
+                transitionNode  = transitionIdx % self.numNodes
+                transitionType  = transitionTypes[ int(transitionIdx/self.numNodes) ]
 
-            self.testedInCurrentState[transitionNode] = False
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                # Perform updates triggered by rate propensities:
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                assert(self.X[transitionNode] == self.transitions[transitionType]['currentState'] and self.X[transitionNode]!=self.F), "Assertion error: Node "+str(transitionNode)+" has unexpected current state "+str(self.X[transitionNode])+" given the intended transition of "+str(transitionType)+"."
+                self.X[transitionNode] = self.transitions[transitionType]['newState']
 
-            self.timer_state[transitionNode] = 0.0
+                self.testedInCurrentState[transitionNode] = False
 
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                self.timer_state[transitionNode] = 0.0
 
-            # Save information about infection events when they occur:
-            if(transitionType == 'StoE'):
-                transitionNode_GNbrs  = list(self.G[transitionNode].keys())
-                transitionNode_GQNbrs = list(self.G_Q[transitionNode].keys())
-                self.infectionsLog.append({ 't':                            self.t,
-                                            'infected_node':                transitionNode,
-                                            'infection_type':               transitionType,
-                                            'infected_node_degree':         self.degree[transitionNode],
-                                            'local_contact_nodes':          transitionNode_GNbrs,
-                                            'local_contact_node_states':    self.X[transitionNode_GNbrs].flatten(),
-                                            'isolation_contact_nodes':      transitionNode_GQNbrs,
-                                            'isolation_contact_node_states':self.X[transitionNode_GQNbrs].flatten() })
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                # Save information about infection events when they occur:
+                if(transitionType == 'StoE'):
+                    transitionNode_GNbrs  = list(self.G[transitionNode].keys())
+                    transitionNode_GQNbrs = list(self.G_Q[transitionNode].keys())
+                    self.infectionsLog.append({ 't':                            self.t,
+                                                'infected_node':                transitionNode,
+                                                'infection_type':               transitionType,
+                                                'infected_node_degree':         self.degree[transitionNode],
+                                                'local_contact_nodes':          transitionNode_GNbrs,
+                                                'local_contact_node_states':    self.X[transitionNode_GNbrs].flatten(),
+                                                'isolation_contact_nodes':      transitionNode_GQNbrs,
+                                                'isolation_contact_node_states':self.X[transitionNode_GQNbrs].flatten() })
 
-            if(transitionType in ['EtoQE', 'ItoQI']):
-                self.set_positive(node=transitionNode, positive=True)
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+                if(transitionType in ['EtoQE', 'ItoQI']):
+                    self.set_positive(node=transitionNode, positive=True)
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         else:
@@ -1357,9 +1362,13 @@ class SEIRSNetworkModel():
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         print_reset = True
         running     = True
-        while running:
 
-            running = self.run_iteration()
+        while running:
+            if checkpoints:
+                next_time = min(checkpointTime, self.tmax)
+            else:
+                next_time = self.tmax
+            running = self.run_iteration(tmax=next_time)
 
             #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Handle checkpoints if applicable:
@@ -2585,7 +2594,7 @@ class ExtSEIRSNetworkModel():
 #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^     
 
-    def run_iteration(self):
+    def run_iteration(self, tmax=numpy.inf):
 
         if(self.tidx >= len(self.tseries)-1):
             # Room has run out in the timeseries storage arrays; double the size of these arrays:
@@ -2615,47 +2624,53 @@ class ExtSEIRSNetworkModel():
             # Compute the time until the next event takes place
             #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             tau = (1/alpha)*numpy.log(float(1/r1))
-            self.t += tau
-            self.timer_state += tau
+
+            if self.t + tau > tmax:
+                tau = tmax - self.t
+                self.t += tau
+                self.timer_state += tau
+            else:
+                self.t += tau
+                self.timer_state += tau
+
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                # Compute which event takes place
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                transitionIdx   = numpy.searchsorted(cumsum,r2*alpha)
+                transitionNode  = transitionIdx % self.numNodes
+                transitionType  = transitionTypes[ int(transitionIdx/self.numNodes) ]
+
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                # Perform updates triggered by rate propensities:
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                assert(self.X[transitionNode] == self.transitions[transitionType]['currentState'] and self.X[transitionNode]!=self.F), "Assertion error: Node "+str(transitionNode)+" has unexpected current state "+str(self.X[transitionNode])+" given the intended transition of "+str(transitionType)+"."
+                self.X[transitionNode] = self.transitions[transitionType]['newState']
+
+                self.testedInCurrentState[transitionNode] = False
+
+                self.timer_state[transitionNode] = 0.0
+
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+                # Save information about infection events when they occur:
+                if(transitionType == 'StoE' or transitionType == 'QStoQE'):
+                    transitionNode_GNbrs  = list(self.G[transitionNode].keys())
+                    transitionNode_GQNbrs = list(self.G_Q[transitionNode].keys())
+                    self.infectionsLog.append({ 't':                            self.t,
+                                                'infected_node':                transitionNode,
+                                                'infection_type':               transitionType,
+                                                'infected_node_degree':         self.degree[transitionNode],
+                                                'local_contact_nodes':          transitionNode_GNbrs,
+                                                'local_contact_node_states':    self.X[transitionNode_GNbrs].flatten(),
+                                                'isolation_contact_nodes':      transitionNode_GQNbrs,
+                                                'isolation_contact_node_states':self.X[transitionNode_GQNbrs].flatten() })
+
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+                if(transitionType in ['EtoQE', 'IPREtoQPRE', 'ISYMtoQSYM', 'IASYMtoQASYM', 'ISYMtoH']):
+                    self.set_positive(node=transitionNode, positive=True)
 
             #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Compute which event takes place
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            transitionIdx   = numpy.searchsorted(cumsum,r2*alpha)
-            transitionNode  = transitionIdx % self.numNodes
-            transitionType  = transitionTypes[ int(transitionIdx/self.numNodes) ]
-
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Perform updates triggered by rate propensities:
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            assert(self.X[transitionNode] == self.transitions[transitionType]['currentState'] and self.X[transitionNode]!=self.F), "Assertion error: Node "+str(transitionNode)+" has unexpected current state "+str(self.X[transitionNode])+" given the intended transition of "+str(transitionType)+"."
-            self.X[transitionNode] = self.transitions[transitionType]['newState']
-
-            self.testedInCurrentState[transitionNode] = False
-
-            self.timer_state[transitionNode] = 0.0
-
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-            # Save information about infection events when they occur:
-            if(transitionType == 'StoE' or transitionType == 'QStoQE'):
-                transitionNode_GNbrs  = list(self.G[transitionNode].keys())
-                transitionNode_GQNbrs = list(self.G_Q[transitionNode].keys())
-                self.infectionsLog.append({ 't':                            self.t,
-                                            'infected_node':                transitionNode,
-                                            'infection_type':               transitionType,
-                                            'infected_node_degree':         self.degree[transitionNode],
-                                            'local_contact_nodes':          transitionNode_GNbrs,
-                                            'local_contact_node_states':    self.X[transitionNode_GNbrs].flatten(),
-                                            'isolation_contact_nodes':      transitionNode_GQNbrs,
-                                            'isolation_contact_node_states':self.X[transitionNode_GQNbrs].flatten() })
-
-            #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-            if(transitionType in ['EtoQE', 'IPREtoQPRE', 'ISYMtoQSYM', 'IASYMtoQASYM', 'ISYMtoH']):
-                self.set_positive(node=transitionNode, positive=True)
-
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         else:
 
@@ -2765,8 +2780,11 @@ class ExtSEIRSNetworkModel():
         print_reset = True
         running     = True
         while running:
-
-            running = self.run_iteration()
+            if checkpoints:
+                next_time = min(checkpointTime, self.tmax)
+            else:
+                next_time = self.tmax
+            running = self.run_iteration(tmax=next_time)
 
             #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Handle checkpoints if applicable:
