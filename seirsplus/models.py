@@ -1272,7 +1272,7 @@ class SEIRSNetworkModel():
 
         else:
 
-            tau = 0.01
+            tau = min(0.01, self.tmax - self.t)
             self.t += tau
             self.timer_state += tau
 
@@ -2674,8 +2674,7 @@ class ExtSEIRSNetworkModel():
             #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         else:
-
-            tau = 0.01
+            tau = min(0.01, self.tmax - self.t)
             self.t += tau
             self.timer_state += tau
 
